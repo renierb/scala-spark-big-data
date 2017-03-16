@@ -3,8 +3,9 @@ package wikipedia
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
-
 import org.apache.spark.rdd.RDD
+
+import scala.collection.immutable.Iterable
 
 case class WikipediaArticle(title: String, text: String)
 
@@ -14,18 +15,28 @@ object WikipediaRanking {
     "JavaScript", "Java", "PHP", "Python", "C#", "C++", "Ruby", "CSS",
     "Objective-C", "Perl", "Scala", "Haskell", "MATLAB", "Clojure", "Groovy")
 
-  val conf: SparkConf = ???
-  val sc: SparkContext = ???
+  val conf: SparkConf = new SparkConf().setMaster("local").setAppName("wikipedia")
+
+  val sc: SparkContext = new SparkContext(conf)
+
   // Hint: use a combination of `sc.textFile`, `WikipediaData.filePath` and `WikipediaData.parse`
-  val wikiRdd: RDD[WikipediaArticle] = ???
+  val wikiRdd: RDD[WikipediaArticle] = sc.textFile(WikipediaData.filePath).map(WikipediaData.parse)
 
   /** Returns the number of articles on which the language `lang` occurs.
-   *  Hint1: consider using method `aggregate` on RDD[T].
-   *  Hint2: should you count the "Java" language when you see "JavaScript"?
-   *  Hint3: the only whitespaces are blanks " "
-   *  Hint4: no need to search in the title :)
-   */
-  def occurrencesOfLang(lang: String, rdd: RDD[WikipediaArticle]): Int = ???
+    * Hint1: consider using method `aggregate` on RDD[T].
+    * Hint2: should you count the "Java" language when you see "JavaScript"?
+    * Hint3: the only whitespaces are blanks " "
+    * Hint4: no need to search in the title :)
+    */
+  def occurrencesOfLang(lang: String, rdd: RDD[WikipediaArticle]): Int = {
+    def countLanguageOccurrences(wiki: WikipediaArticle) = {
+      wiki.text.split(" ").count(_.equalsIgnoreCase(lang))
+    }
+
+    wikiRdd.aggregate(0)((total, wiki) => {
+      total + countLanguageOccurrences(wiki)
+    }, _ + _)
+  }
 
   /* (1) Use `occurrencesOfLang` to compute the ranking of the languages
    *     (`val langs`) by determining the number of Wikipedia articles that
@@ -79,6 +90,7 @@ object WikipediaRanking {
   }
 
   val timing = new StringBuffer
+
   def timed[T](label: String, code: => T): T = {
     val start = System.currentTimeMillis()
     val result = code
