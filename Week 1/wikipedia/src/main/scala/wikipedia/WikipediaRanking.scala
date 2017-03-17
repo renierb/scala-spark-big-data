@@ -29,13 +29,21 @@ object WikipediaRanking {
     * Hint4: no need to search in the title :)
     */
   def occurrencesOfLang(lang: String, rdd: RDD[WikipediaArticle]): Int = {
-    def countLanguageOccurrences(wiki: WikipediaArticle) = {
-      wiki.text.split(" ").count(_.equalsIgnoreCase(lang))
-    }
-
     wikiRdd.aggregate(0)((total, wiki) => {
-      total + countLanguageOccurrences(wiki)
+      total + (if (isMentioned(lang, wiki)) 1 else 0)
     }, _ + _)
+  }
+
+  def isMentioned(lang: String, wiki: WikipediaArticle): Boolean = {
+    val index = wiki.text.indexOf(lang)
+    if (index >= 0) {
+      if (index > 0 && index < wiki.text.length - lang.length)
+        wiki.text(index - 1) == ' ' && wiki.text(index + 1) == ' '
+      else
+        true
+    } else {
+      false
+    }
   }
 
   /* (1) Use `occurrencesOfLang` to compute the ranking of the languages
@@ -46,18 +54,21 @@ object WikipediaRanking {
    *   Note: this operation is long-running. It can potentially run for
    *   several seconds.
    */
-  def rankLangs(langs: List[String], rdd: RDD[WikipediaArticle]): List[(String, Int)] = ???
+  def rankLangs(langs: List[String], rdd: RDD[WikipediaArticle]): List[(String, Int)] = {
+    langs.map(l => (l, occurrencesOfLang(l, rdd))).sortBy(_._2)
+  }
 
   /* Compute an inverted index of the set of articles, mapping each language
    * to the Wikipedia pages in which it occurs.
    */
-  def makeIndex(langs: List[String], rdd: RDD[WikipediaArticle]): RDD[(String, Iterable[WikipediaArticle])] = ???
+  def makeIndex(langs: List[String], rdd: RDD[WikipediaArticle]): RDD[(String, Iterable[WikipediaArticle])] = {
+    ???
+  }
 
   /* (2) Compute the language ranking again, but now using the inverted index. Can you notice
    *     a performance improvement?
    *
-   *   Note: this operation is long-running. It can potentially run for
-   *   several seconds.
+   *   Note: this operation is long-running. It can potentially run for several seconds.
    */
   def rankLangsUsingIndex(index: RDD[(String, Iterable[WikipediaArticle])]): List[(String, Int)] = ???
 
