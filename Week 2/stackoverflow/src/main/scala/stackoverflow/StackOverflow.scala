@@ -121,7 +121,7 @@ class StackOverflow extends Serializable {
       }
     }
 
-    ???
+    scored.map(s => (firstLangInTag(s._1.tags, langs).map(_ * 50000).get, s._2))
   }
 
   /** Sample the vectors */
@@ -182,20 +182,12 @@ class StackOverflow extends Serializable {
     if (debug) {
       println(
         s"""Iteration: $iter
-
            |  * current distance: $distance
-
            |  * desired distance: $kmeansEta
-
            |  * means:""".stripMargin)
-      for (idx <- 0 until
-        kmeansKernels)
-      println(f"   ${means(idx).
-        toString}%20s ==>
-        ${
-        newMeans(idx).
-          toString}%20s  " +
-              f"  distance: ${euclideanDistance(means(idx), newMeans(idx))}%8.0f")
+      for (idx <- 0 until kmeansKernels)
+        println(f"   ${means(idx).toString}%20s ==> ${newMeans(idx).toString}%20s  " +
+                f"  distance: ${euclideanDistance(means(idx), newMeans(idx))}%8.0f")
     }
 
     if (converged(distance))
@@ -203,10 +195,7 @@ class StackOverflow extends Serializable {
     else if (iter < kmeansMaxIterations)
       kmeans(newMeans, vectors, iter + 1, debug)
     else {
-      println(
-
-
-        "Reached max iterations!")
+      println("Reached max iterations!")
       newMeans
     }
   }
@@ -218,7 +207,7 @@ class StackOverflow extends Serializable {
   //
 
   /** Decide whether the kmeans clustering converged */
-  def converged(distance: Double) =
+  def converged(distance: Double): Boolean =
     distance < kmeansEta
 
   /** Return the euclidean distance between two points */
@@ -244,7 +233,7 @@ class StackOverflow extends Serializable {
   def findClosest(p: (Int, Int), centers: Array[(Int, Int)]): Int = {
     var bestIndex = 0
     var closest = Double.PositiveInfinity
-    for (i <- 0 until centers.length) {
+    for (i <- centers.indices) {
       val tempDist = euclideanDistance(p, centers(i))
       if (tempDist < closest) {
         closest = tempDist
