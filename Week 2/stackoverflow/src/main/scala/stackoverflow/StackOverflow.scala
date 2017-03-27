@@ -24,8 +24,8 @@ object StackOverflow extends StackOverflow {
     val raw     = rawPostings(lines)
     val grouped = groupedPostings(raw)
     val scored  = scoredPostings(grouped)
-    val vectors = vectorPostings(scored)
-//    assert(vectors.count() == 2121822, "Incorrect number of vectors: " + vectors.count())
+    val vectors = vectorPostings(scored).persist()
+    //assert(vectors.count() == 2121822, "Incorrect number of vectors: " + vectors.count())
 
     val means   = kmeans(sampleVectors(vectors), vectors, debug = true)
     val results = clusterResults(means, vectors)
@@ -174,9 +174,17 @@ class StackOverflow extends Serializable {
 
   /** Main kmeans computation */
   @tailrec final def kmeans(means: Array[(Int, Int)], vectors: RDD[(Int, Int)], iter: Int = 1, debug: Boolean = false): Array[(Int, Int)] = {
-    val newMeans = means.clone() // you need to compute newMeans
+    val grouped: RDD[(Int, Iterable[(Int, Int)])] = vectors.groupBy(v => findClosest(v, means))
+    val averageMap = grouped.mapValues(averageVectors).collect().toMap
 
-    // TODO: Fill in the newMeans array
+    val newMeans: Array[(Int, Int)] =
+      (for (index <- means.indices)
+        yield
+          if (averageMap.contains(index))
+            averageMap(index)
+          else
+            means(index)).toArray
+
     val distance = euclideanDistance(means, newMeans)
 
     if (debug) {
