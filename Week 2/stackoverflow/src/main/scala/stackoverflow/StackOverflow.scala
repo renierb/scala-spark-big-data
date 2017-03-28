@@ -1,11 +1,9 @@
 package stackoverflow
 
-import org.apache.spark.SparkConf
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
-import annotation.tailrec
-import scala.reflect.ClassTag
+
+import scala.annotation.tailrec
 
 /** A raw stackoverflow posting, either a question or an answer */
 case class Posting(postingType: Int, id: Int, acceptedAnswer: Option[Int], parentId: Option[Int], score: Int, tags: Option[String]) extends Serializable
@@ -273,20 +271,20 @@ class StackOverflow extends Serializable {
   //
   def clusterResults(means: Array[(Int, Int)], vectors: RDD[(Int, Int)]): Array[(String, Double, Int, Int)] = {
     val closest = vectors.map(p => (findClosest(p, means), p))
-    val closestGrouped = closest.groupByKey()
+    val closestGrouped: RDD[(Int, Iterable[(Int, Int)])] = closest.groupByKey()
 
     val median =
       closestGrouped.mapValues { vs =>
-      val langLabel: String   = ???
-        // most common language in the cluster
-      val langPercent: Double = ???
+        // most common language in the cluster:
+        val langIndex = vs.groupBy(_._1).maxBy(_._1)._1
+        val langLabel: String = langs(langIndex / 50000)
         // percent of the questions in the most common language
-      val clusterSize: Int    = ???
-      val medianScore: Int    = ???
+        val clusterSize: Int = vs.count(_ => true)
+        val langPercent: Double = vs.count(_._1 == langIndex) / clusterSize.toDouble * 100
+        val medianScore: Int = vs.map(_._2).sum / clusterSize
 
-      (
-        langLabel, langPercent, clusterSize, medianScore)
-    }
+        (langLabel, langPercent, clusterSize, medianScore)
+      }
 
     median.collect().map(_._2).sortBy(_._4)
   }
@@ -296,6 +294,6 @@ class StackOverflow extends Serializable {
     println("  Score  Dominant language (%percent)  Questions")
     println("================================================")
     for ((lang, percent, size, score) <- results)
-      println(f"${score}%7d  ${lang}%-17s (${percent}%-5.1f%%)      ${size}%7d")
+      println(f"$score%7d  $lang%-17s ($percent%-5.1f%%)      $size%7d")
   }
 }
