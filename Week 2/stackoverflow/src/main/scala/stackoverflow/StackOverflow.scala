@@ -1,7 +1,7 @@
 package stackoverflow
 
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.annotation.tailrec
 
@@ -22,12 +22,14 @@ object StackOverflow extends StackOverflow {
     val raw     = rawPostings(lines)
     val grouped = groupedPostings(raw)
     val scored  = scoredPostings(grouped)
-    val vectors = vectorPostings(scored).persist()
+    val vectors = vectorPostings(scored)
     //assert(vectors.count() == 2121822, "Incorrect number of vectors: " + vectors.count())
 
     val means   = kmeans(sampleVectors(vectors), vectors, debug = true)
     val results = clusterResults(means, vectors)
     printResults(results)
+
+    sc.stop()
   }
 }
 
@@ -99,7 +101,7 @@ class StackOverflow extends Serializable {
       highScore
     }
 
-    grouped.map(g => (g._2.head._1, answerHighScore(g._2.map(_._2).toArray)))
+    grouped.map(g => (g._2.head._1, g._2.map(_._2.score).max))
   }
 
 
@@ -119,7 +121,7 @@ class StackOverflow extends Serializable {
       }
     }
 
-    scored.map(s => (firstLangInTag(s._1.tags, langs).map(_ * 50000).get, s._2))
+    scored.map(s => (firstLangInTag(s._1.tags, langs).map(_ * 50000).get, s._2)).cache()
   }
 
   /** Sample the vectors */
@@ -278,15 +280,23 @@ class StackOverflow extends Serializable {
         // most common language in the cluster:
         val langIndex = vs.groupBy(_._1).maxBy(_._1)._1
         val langLabel: String = langs(langIndex / 50000)
+
         // percent of the questions in the most common language
         val clusterSize: Int = vs.count(_ => true)
         val langPercent: Double = vs.count(_._1 == langIndex) / clusterSize.toDouble * 100
-        val medianScore: Int = vs.map(_._2).sum / clusterSize
+
+        val sizes = vs.map(_._2).toArray
+        scala.util.Sorting.quickSort(sizes)
+        val medianScore: Int =
+          if (sizes.length % 2 == 0)
+            (sizes(sizes.length / 2) + sizes(sizes.length / 2 - 1)) / 2
+          else
+            sizes(sizes.length / 2 + 1)
 
         (langLabel, langPercent, clusterSize, medianScore)
       }
 
-    median.collect().map(_._2).sortBy(_._4)
+    median.map(_._2).collect().sortBy(_._4)
   }
 
   def printResults(results: Array[(String, Double, Int, Int)]): Unit = {
