@@ -174,16 +174,13 @@ class StackOverflow extends Serializable {
 
   /** Main kmeans computation */
   @tailrec final def kmeans(means: Array[(Int, Int)], vectors: RDD[(Int, Int)], iter: Int = 1, debug: Boolean = false): Array[(Int, Int)] = {
-    val grouped: RDD[(Int, Iterable[(Int, Int)])] = vectors.groupBy(v => findClosest(v, means))
-    val averageMap = grouped.mapValues(averageVectors).collect().toMap
+    val newMeans = means.clone()
 
-    val newMeans: Array[(Int, Int)] =
-      (for (index <- means.indices)
-        yield
-          if (averageMap.contains(index))
-            averageMap(index)
-          else
-            means(index)).toArray
+    val closestGrouped: RDD[(Int, Iterable[(Int, Int)])] = vectors.groupBy(v => findClosest(v, means))
+    closestGrouped.mapValues(averageVectors).collect()
+      .foreach {
+        case (index, vector) => newMeans(index) = vector
+      }
 
     val distance = euclideanDistance(means, newMeans)
 
@@ -285,13 +282,15 @@ class StackOverflow extends Serializable {
         val clusterSize: Int = vs.count(_ => true)
         val langPercent: Double = vs.count(_._1 == langIndex) / clusterSize.toDouble * 100
 
-        val sizes = vs.map(_._2).toArray
-        scala.util.Sorting.quickSort(sizes)
+        val sortedVectors = vs.map(_._2).toArray
+        scala.util.Sorting.quickSort(sortedVectors)
+
+        val (first, second) = sortedVectors.splitAt(sortedVectors.length / 2)
         val medianScore: Int =
-          if (sizes.length % 2 == 0)
-            (sizes(sizes.length / 2) + sizes(sizes.length / 2 - 1)) / 2
+          if (sortedVectors.length % 2 == 0)
+            (first.last + second.head) / 2
           else
-            sizes(sizes.length / 2 + 1)
+            second.head
 
         (langLabel, langPercent, clusterSize, medianScore)
       }
